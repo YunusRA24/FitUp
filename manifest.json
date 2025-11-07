@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "FitUp Proto - Screenshot & Catalog",
+  "version": "0.1",
+  "description": "Capture page screenshot, extract product info, and keep a running list (prototype).",
+  "permissions": [
+    "storage",
+    "tabs",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "FitUp"
+  },
+  "background": {
+    "service_worker": "service_worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_script.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
