@@ -221,6 +221,68 @@ function parseJsonLD() {
   return null;
 }
 
+function extractAmazonPrice() {
+  // Amazon-specific price selectors (in order of preference)
+  const amazonPriceSelectors = [
+    '.a-price .a-offscreen', // Hidden price for screen readers (most reliable)
+    '.a-price-whole', // Price whole number part
+    '#priceblock_ourprice', // Regular price
+    '#priceblock_dealprice', // Deal price
+    '#priceblock_saleprice', // Sale price
+    '#price', // Generic price ID
+    '.a-price-symbol + .a-price-whole', // Price with symbol
+    '[data-a-color="price"] .a-offscreen', // Price in data attribute
+    '.a-price.a-text-price .a-offscreen', // Text price
+    '#price_inside_buybox', // Price in buy box
+    '#newBuyBoxPrice', // New buy box price
+    '.a-price-range', // Price range
+  ];
+
+  for (const selector of amazonPriceSelectors) {
+    const el = document.querySelector(selector);
+    if (el) {
+      let priceText = '';
+      // For .a-offscreen, get the text content
+      if (selector.includes('.a-offscreen')) {
+        priceText = el.textContent || el.innerText || '';
+      } else {
+        // For other selectors, try to get the full price including symbol
+        const priceContainer = el.closest('.a-price') || el;
+        if (priceContainer) {
+          // Try to get the full price including currency symbol
+          const symbol = priceContainer.querySelector('.a-price-symbol')?.textContent || '$';
+          const whole = priceContainer.querySelector('.a-price-whole')?.textContent || '';
+          const fraction = priceContainer.querySelector('.a-price-fraction')?.textContent || '';
+          if (whole) {
+            priceText = symbol + whole + (fraction ? '.' + fraction : '');
+          } else {
+            priceText = priceContainer.textContent || priceContainer.innerText || '';
+          }
+        } else {
+          priceText = el.textContent || el.innerText || '';
+        }
+      }
+      
+      if (priceText) {
+        // Clean up the price text
+        priceText = priceText.trim();
+        // Extract price pattern
+        const match = priceText.match(/(USD|\$|€|£)\s?([0-9]+(?:[,.][0-9]{2})?)/i);
+        if (match) {
+          return match[0];
+        }
+        // If no currency symbol, try to find just the number
+        const numMatch = priceText.match(/[0-9]+(?:[,.][0-9]{2})?/);
+        if (numMatch) {
+          return '$' + numMatch[0];
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
 function textFallbacks() {
   const ogTitle = document.querySelector('meta[property="og:title"]')?.content;
   const metaTitle = document.querySelector('meta[name="title"]')?.content;
@@ -229,16 +291,31 @@ function textFallbacks() {
   const desc = document.querySelector('meta[name="description"]')?.content || '';
 
   let price = '';
-  const priceSelectors = [
-    '[itemprop="price"]', '.price', '[class*="price"]', '[id*="price"]', '.product-price'
-  ];
-  for (const sel of priceSelectors) {
-    const el = document.querySelector(sel);
-    if (el && (el.innerText || el.textContent)) {
-      const t = el.innerText.trim();
-      if (t) { price = t; break; }
+  
+  // Amazon-specific price extraction
+  const isAmazon = window.location.hostname.includes('amazon.com') || 
+                   window.location.hostname.includes('amazon.');
+  if (isAmazon) {
+    const amazonPrice = extractAmazonPrice();
+    if (amazonPrice) {
+      price = amazonPrice;
     }
   }
+  
+  // Fallback to generic price selectors if Amazon-specific extraction didn't work
+  if (!price) {
+    const priceSelectors = [
+      '[itemprop="price"]', '.price', '[class*="price"]', '[id*="price"]', '.product-price'
+    ];
+    for (const sel of priceSelectors) {
+      const el = document.querySelector(sel);
+      if (el && (el.innerText || el.textContent)) {
+        const t = el.innerText.trim();
+        if (t) { price = t; break; }
+      }
+    }
+  }
+  
   if (!price) {
     const bodyText = document.body.innerText;
     const match = bodyText.match(/(USD|\$|€|£)\s?[0-9]+(?:[,.][0-9]{2})?/i);
@@ -246,7 +323,23 @@ function textFallbacks() {
     else {
       // maybe there are two prices like "$49.95 $29" – capture them all and pick one
       const all = document.body.innerText.match(/(USD|\$|€|£)?\s?[0-9]+(?:[,.][0-9]{2})?/gi);
-      if (all && all.length) price = all.slice(0,4).join(' ');
+      if (all && all.length) {
+        // Filter out very large numbers (likely subtotals or totals)
+        const prices = all.filter(p => {
+          const num = parseFloat(p.replace(/[^0-9.,]/g, '').replace(',', '.'));
+          return num < 10000; // Filter out prices over $10,000 (likely totals)
+        });
+        if (prices.length > 0) {
+          // Pick the smallest price (usually the product price, not subtotal)
+          const sorted = prices.map(p => {
+            const num = parseFloat(p.replace(/[^0-9.,]/g, '').replace(',', '.'));
+            return {raw: p, num: isNaN(num) ? Infinity : num};
+          }).sort((a, b) => a.num - b.num);
+          price = sorted[0].raw;
+        } else {
+          price = all.slice(0,4).join(' ');
+        }
+      }
     }
   }
 
@@ -268,6 +361,117 @@ function collectBestImage() {
   if (json && json.image) return normalizeUrl(json.image);
   const og = document.querySelector('meta[property="og:image"]')?.content;
   if (og) return normalizeUrl(og);
+
+  // Amazon-specific image extraction
+  const isAmazon = window.location.hostname.includes('amazon.com') || 
+                   window.location.hostname.includes('amazon.');
+  if (isAmazon) {
+    // Try Amazon-specific selectors for main product image
+    const amazonSelectors = [
+      '#landingImage',
+      '#imgBlkFront',
+      '#main-image',
+      '#imageBlock_feature_div img',
+      '#leftCol img[data-a-image-name="landingImage"]',
+      '#main-image-container img',
+      '#imageBlock img',
+      '.a-dynamic-image[data-a-image-name="landingImage"]',
+      '#product-image img',
+      '#imageBlock_feature_div .a-dynamic-image'
+    ];
+    
+    for (const selector of amazonSelectors) {
+      const img = document.querySelector(selector);
+      if (img) {
+        // Try data-a-dynamic-image first (Amazon's JSON format)
+        const dynamicImageData = img.getAttribute('data-a-dynamic-image');
+        if (dynamicImageData) {
+          try {
+            const imageMap = JSON.parse(dynamicImageData);
+            // Get the largest image from the map (keys are URLs, values are dimensions)
+            if (typeof imageMap === 'object' && imageMap !== null) {
+              const imageEntries = Object.entries(imageMap);
+              if (imageEntries.length > 0) {
+                // Sort by area (width * height) and get the largest
+                imageEntries.sort((a, b) => {
+                  const areaA = (a[1] && a[1][0] * a[1][1]) || 0;
+                  const areaB = (b[1] && b[1][0] * b[1][1]) || 0;
+                  return areaB - areaA;
+                });
+                const largestUrl = imageEntries[0][0];
+                if (largestUrl) {
+                  return normalizeUrl(largestUrl);
+                }
+              }
+            }
+          } catch (e) {
+            // If JSON parse fails, continue to other methods
+          }
+        }
+        
+        // Try standard image attributes
+        const src = img.src || img.currentSrc || img.getAttribute('data-src') || 
+                   img.getAttribute('data-old-src');
+        if (src) {
+          // Clean up Amazon image URLs - remove size parameters to get full resolution
+          let cleanSrc = src;
+          // Amazon images often have size parameters like _AC_SX679_ or _AC_UX679_
+          // Remove these to get a better quality image
+          cleanSrc = cleanSrc.replace(/_[A-Z]{2}_[A-Z]?[0-9]+_/g, '_AC_');
+          // Try to get the base image without size restrictions
+          if (cleanSrc.includes('_AC_')) {
+            cleanSrc = cleanSrc.replace(/_AC_[A-Z]?[0-9]+(_[A-Z]+)?/g, '');
+          }
+          return normalizeUrl(cleanSrc);
+        }
+      }
+    }
+    
+    // Fallback: look for images in the product image container area
+    const imageContainer = document.querySelector('#imageBlock, #imageBlock_feature_div, #leftCol');
+    if (imageContainer) {
+      const imgs = Array.from(imageContainer.querySelectorAll('img'));
+      for (const img of imgs) {
+        // Try data-a-dynamic-image first
+        const dynamicImageData = img.getAttribute('data-a-dynamic-image');
+        if (dynamicImageData) {
+          try {
+            const imageMap = JSON.parse(dynamicImageData);
+            if (typeof imageMap === 'object' && imageMap !== null) {
+              const imageEntries = Object.entries(imageMap);
+              if (imageEntries.length > 0) {
+                imageEntries.sort((a, b) => {
+                  const areaA = (a[1] && a[1][0] * a[1][1]) || 0;
+                  const areaB = (b[1] && b[1][0] * b[1][1]) || 0;
+                  return areaB - areaA;
+                });
+                const largestUrl = imageEntries[0][0];
+                if (largestUrl && !largestUrl.includes('sprite') && !largestUrl.includes('icon') && 
+                    !largestUrl.includes('logo') && !largestUrl.includes('badge')) {
+                  return normalizeUrl(largestUrl);
+                }
+              }
+            }
+          } catch (e) {
+            // Continue to other methods
+          }
+        }
+        
+        // Try standard image attributes
+        const src = img.src || img.currentSrc || img.getAttribute('data-src') || 
+                   img.getAttribute('data-old-src');
+        if (src && !src.includes('sprite') && !src.includes('icon') && 
+            !src.includes('logo') && !src.includes('badge')) {
+          let cleanSrc = src;
+          cleanSrc = cleanSrc.replace(/_[A-Z]{2}_[A-Z]?[0-9]+_/g, '_AC_');
+          if (cleanSrc.includes('_AC_')) {
+            cleanSrc = cleanSrc.replace(/_AC_[A-Z]?[0-9]+(_[A-Z]+)?/g, '');
+          }
+          return normalizeUrl(cleanSrc);
+        }
+      }
+    }
+  }
 
   // find largest image on page (naturalWidth*naturalHeight)
   const imgs = Array.from(document.images || []);

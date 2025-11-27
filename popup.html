@@ -7,10 +7,46 @@
 </head>
 <body>
   <h2>FitUp</h2>
-  <button id="screenshotBtn">Capture screenshot & extract</button>
-  <div id="status"></div>
-  <h3>Universal Cart</h3>
-  <div id="itemsList"></div>
+  
+  <!-- Tab Navigation -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="intro">Style Preferences</button>
+    <button class="tab-btn" data-tab="cart">Cart</button>
+    <button class="tab-btn" data-tab="suggestions">Suggestions</button>
+  </div>
+
+  <!-- Intro Tab (Style Preferences) -->
+  <div id="introTab" class="tab-content active">
+    <div id="introStatus" class="status"></div>
+    <div id="cycleIndicator">Cycle 1 of 4</div>
+    <div id="imageSelectionContainer">
+      <!-- Images will be dynamically inserted here -->
+    </div>
+  </div>
+
+  <!-- Cart Tab (Existing Functionality) -->
+  <div id="cartTab" class="tab-content">
+    <button id="screenshotBtn">Capture screenshot & extract</button>
+    <div class="url-input-section">
+      <div class="url-input-container">
+        <input type="text" id="urlInput" placeholder="Paste product URL here..." />
+        <button id="addByUrlBtn">Add by URL</button>
+      </div>
+    </div>
+    <div id="status"></div>
+    <h3>Universal Cart</h3>
+    <div id="itemsList"></div>
+  </div>
+
+  <!-- Suggestions Tab -->
+  <div id="suggestionsTab" class="tab-content">
+    <div id="suggestionsStatus" class="status"></div>
+    <button id="generateSuggestionsBtn" class="primary-btn">Generate AI Suggestions</button>
+    <div id="suggestionsResults"></div>
+    <button id="logInfoBtn" class="primary-btn log-info-btn">Log Info</button>
+    <div id="logInfoResults"></div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>

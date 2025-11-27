@@ -28,5 +28,11 @@
       "js": ["content_script.js"],
       "run_at": "document_idle"
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["dataset_Amazon-crawler-task_2025-11-26_00-44-46-736.json"],
+      "matches": ["<all_urls>"]
+    }
   ]
 }
