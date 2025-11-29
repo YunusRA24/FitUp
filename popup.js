@@ -197,12 +197,12 @@ const logInfoResults = document.getElementById('logInfoResults');
 let lastRawAIResponse = null;
 
 const XANO_API_URL = 'https://umichentr402.xano.io/api:5WPM75I0/stlyepref';
-const GEMINI_API_KEY = 'AIzaSyBfMvHPpyaoazRhKMlr2-A_JUAeCVDuk6c';
+const GEMINI_KEY_API_URL = 'https://umichentr402.xano.io/api:5WPM75I0/gemini_key_do_not_touch';
 // Using gemini-2.5-flash as per the official Gemini API guide
 // For Chrome extensions, we use REST API directly (no npm packages needed)
 const GEMINI_MODEL = 'gemini-2.5-flash'; // Change to 'gemini-2.5-pro' for better quality
 // Using v1 API endpoint (v1beta may be deprecated)
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
 
 // Amazon pants dataset file path
 const AMAZON_PANTS_DATASET_FILE = 'dataset_Amazon-crawler-task_2025-11-26_00-44-46-736.json';
@@ -210,6 +210,21 @@ const AMAZON_PANTS_DATASET_FILE = 'dataset_Amazon-crawler-task_2025-11-26_00-44-
 function showSuggestionsStatus(message, isError = false) {
   suggestionsStatus.textContent = message;
   suggestionsStatus.style.color = isError ? '#d32f2f' : '#1976d2';
+}
+
+// Function to fetch the Gemini API key from backend
+async function fetchGeminiKey() {
+  try {
+    const response = await fetch(GEMINI_KEY_API_URL);
+    const data = await response.json();
+    if (Array.isArray(data) && data.length > 0 && data[0].Key) {
+      return data[0].Key;
+    }
+    throw new Error('Invalid API key response');
+  } catch (error) {
+    console.error('Error fetching Gemini API key:', error);
+    throw error;
+  }
 }
 
 async function fetchUserPreferences() {
@@ -280,6 +295,8 @@ function analyzePreferences(preferences) {
 
 async function callGeminiAPI(prompt) {
   try {
+    const apiKey = await fetchGeminiKey();
+    const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
     const response = await fetch(GEMINI_API_URL, {
       method: 'POST',
       headers: {
